@@ -28,4 +28,43 @@
         </field>
     </record>
 
+    <record id="stock_picking_purchase_search" model="ir.ui.view">
+        <field name="name">stock.picking.purchase.search</field>
+	<field name="model">stock.picking.purchase</field>
+	<field name="arch" type="xml">
+		<search>
+			<field name="partner_id" />
+			<field name="purchase_order_id" />
+			<field name="picking_id" />
+			<field name="product_id" />
+		</search>
+        </field>
+    </record>
+
+    <record id="stock_picking_purchase_tree" model="ir.ui.view">
+        <field name="name">stock.picking.purchase.tree</field>
+	<field name="model">stock.picking.purchase</field>
+	<field name="arch" type="xml">
+		<tree edit="0" delete="0" create="0">
+			<field name="purchase_order_id" />
+			<field name="partner_id" />
+			<field name="picking_id" />
+			<field name="product_id" />
+			<field name="qty" />
+		</tree>
+        </field>
+    </record>
+
+    <record id="receipt_purchase_order_action" model="ir.actions.act_window">
+        <field name="name">Cumplimiento pedidos</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">stock.picking.purchase</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+	<menuitem id="receipt_purchase_order_menu"
+		name="Cumplimiento pedidos"
+		action="receipt_purchase_order_action"
+		parent="purchase.menu_procurement_management" ></menuitem>
+
 </odoo>

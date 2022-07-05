@@ -3,11 +3,32 @@ from odoo.exceptions import ValidationError
 from datetime import date,datetime
 from psycopg2 import sql
 
+class ResPartner(models.Model):
+    _inherit = 'res.partner'
+
+    #@api.constrains('ref')
+    #def check_ref_unique(self):
+    #    if self.ref and self.ref != '':
+    #        partners = self.env['res.partner'].search([('ref','=',self.ref)])
+    #        if len(partners) > 1:
+    #            raise ValidationError('Ya existen partners con codigo %s'%(self.ref))
+
+
+    _sql_constraints = [
+        ('ref_unique','UNIQUE(ref)','El campo referencia del partner debe ser unico'),
+    ]
+
+
 class StockPickingPurchase(models.Model):
     _name = 'stock.picking.purchase'
     _description = 'stock.picking.purchase'
 
+    def onchange_partner_id(self):
+        if self.purchase_order_id:
+            self.partner_id = self.purchase_order_id.partner_id.id
+
     picking_id = fields.Many2one('stock.picking','Transferencia')
+    partner_id = fields.Many2one('res.partner',string='Proveedor')
     purchase_order_id = fields.Many2one('purchase.order','Orden de compra')
     product_id = fields.Many2one('product.product','Producto')
     qty = fields.Integer('Cantidad')

@@ -31,9 +31,33 @@ class StockPickingPurchase(models.Model):
     partner_id = fields.Many2one('res.partner',string='Proveedor')
     purchase_order_id = fields.Many2one('purchase.order','Orden de compra')
     product_id = fields.Many2one('product.product','Producto')
-    qty = fields.Integer('Cantidad')
+    qty = fields.Float('Cantidad')
+    uom_id = fields.Many2one('uom.uom','Unidad de medida')
+    dest_uom_id = fields.Many2one('uom.uom','UoM destino',compute="_compute_dest_qty",store=True)
+    dest_qty = fields.Float('Cantidad destino',compute="_compute_dest_qty",store=True)
 
-    @api.constrains('product_id','qty')
+    @api.depends('product_id','purchase_order_id','uom_id','qty')
+    def _compute_dest_qty(self):
+        for rec in self:
+            if rec.product_id and rec.purchase_order_id and rec.uom_id and rec.qty:
+                po_lines = self.env['purchase.order.line'].search(
+                    [('product_id','=',rec.product_id.id),
+                     ('order_id','=',rec.purchase_order_id.id)],
+                    limit=1
+                    )
+                current_uom = rec.uom_id
+                if rec.uom_id.id != po_lines.product_uom.id:
+                    final_qty = current_uom._compute_quantity(rec.qty,po_lines.product_uom)
+                else:
+                    final_qty = rec.qty
+                rec.dest_qty = final_qty
+                rec.dest_uom_id = po_lines.product_uom.id
+            else:
+                rec.dest_qty = 0
+                rec.dest_uom_id = None
+
+
+    @api.constrains('product_id','uom_id','qty')
     def check_product_id(self):
         if self.product_id and self.purchase_order_id:
             po_lines = self.env['purchase.order.line'].search(
@@ -43,8 +67,29 @@ class StockPickingPurchase(models.Model):
                     )
             if not po_lines:
                 raise ValidationError('Producto %s no esta presente en el pedido'%(self.product_id.name))
-            if po_lines.product_qty < self.qty:
+            current_uom = self.uom_id
+            if self.uom_id.id != po_lines.product_uom.id:
+                final_qty = current_uom._compute_quantity(self.qty,po_lines.product_uom)
+            else:
+                final_qty = self.qty
+            if po_lines.product_qty < final_qty:
                 raise ValidationError('La cantidad asignada no puede ser mayor a la cantidad pedida')
+        products = {}
+        lines = self.env['stock.picking.purchase'].search([('picking_id','=',self.picking_id.id)])
+        for rec in lines:
+            if rec.product_id.id not in products:
+                products[rec.product_id.id] = rec.qty
+            else:
+                products[rec.product_id.id] = products[rec.product_id.id] + rec.qty 
+        for key,val in products.items():
+            move_line = self.env['stock.move'].search([
+                ('picking_id','=',rec.picking_id.id),
+                ('product_id','=',key)])
+            if not move_line\
+                    or move_line.quantity_done < val:
+                product = self.env['product.product'].browse(key)
+                raise ValidationError('Cantidades ingresadas para el producto %s incorrectas'%(product.name))
+
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -67,7 +112,7 @@ class StockPicking(models.Model):
         # Cantidades por producto y orden de compra
         sql_select = sql.SQL(
             """
-            select purchase_order_id,product_id,sum(qty) as qty
+            select purchase_order_id,product_id,sum(dest_qty) as qty
             from stock_picking_purchase
             group by 1,2
             """
@@ -89,6 +134,11 @@ class StockPicking(models.Model):
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
-    picking_ids = fields.Many2many('stock.picking', string='Receptions', copy=False)
+    def action_mark_done(self):
+        self.ensure_one()
+        if not self.done and self.state in ['done','purchase']:
+            self.done = True
 
+    picking_ids = fields.Many2many('stock.picking', string='Receptions', copy=False)
+    done = fields.Boolean('Finalizada',copy=False)
 

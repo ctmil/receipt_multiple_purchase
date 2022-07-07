@@ -43,7 +43,7 @@
 							<field name="product_id" 
 								domain="[('type','=','product')]" 
 								options="{'no_create': True, 'no_create_edit':True}" />
-							<field name="uom_id" />
+							<field name="uom_id" readonly="1" />
 							<field name="qty" />
 							<field name="dest_uom_id" readonly="1" optional="hide" />
 							<field name="dest_qty" readonly="1" optional="hide" />

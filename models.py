@@ -23,6 +23,7 @@ class StockPickingPurchase(models.Model):
     _name = 'stock.picking.purchase'
     _description = 'stock.picking.purchase'
 
+    @api.onchange('purchase_order_id')
     def onchange_partner_id(self):
         if self.purchase_order_id:
             self.partner_id = self.purchase_order_id.partner_id.id
@@ -32,13 +33,17 @@ class StockPickingPurchase(models.Model):
     purchase_order_id = fields.Many2one('purchase.order','Orden de compra')
     product_id = fields.Many2one('product.product','Producto')
     qty = fields.Float('Cantidad')
-    uom_id = fields.Many2one('uom.uom','Unidad de medida')
+    uom_id = fields.Many2one('uom.uom','Unidad de medida',store=True,compute="_compute_dest_qty")
     dest_uom_id = fields.Many2one('uom.uom','UoM destino',compute="_compute_dest_qty",store=True)
     dest_qty = fields.Float('Cantidad destino',compute="_compute_dest_qty",store=True)
 
-    @api.depends('product_id','purchase_order_id','uom_id','qty')
+    @api.depends('product_id','purchase_order_id','qty')
     def _compute_dest_qty(self):
         for rec in self:
+            picking_id = rec.picking_id
+            move_lines = picking_id.move_lines.filtered(lambda l: l.product_id.id == self.product_id.id)
+            if move_lines:
+                rec.uom_id = move_lines[0].product_uom.id
             if rec.product_id and rec.purchase_order_id and rec.uom_id and rec.qty:
                 po_lines = self.env['purchase.order.line'].search(
                     [('product_id','=',rec.product_id.id),
@@ -53,11 +58,12 @@ class StockPickingPurchase(models.Model):
                 rec.dest_qty = final_qty
                 rec.dest_uom_id = po_lines.product_uom.id
             else:
+                rec.uom_id = None
                 rec.dest_qty = 0
                 rec.dest_uom_id = None
 
 
-    @api.constrains('product_id','uom_id','qty')
+    @api.constrains('product_id','qty')
     def check_product_id(self):
         if self.product_id and self.purchase_order_id:
             po_lines = self.env['purchase.order.line'].search(
@@ -67,8 +73,11 @@ class StockPickingPurchase(models.Model):
                     )
             if not po_lines:
                 raise ValidationError('Producto %s no esta presente en el pedido'%(self.product_id.name))
-            current_uom = self.uom_id
-            if self.uom_id.id != po_lines.product_uom.id:
+            picking_id = self.picking_id
+            move_lines = picking_id.move_lines.filtered(lambda l: l.product_id.id == self.product_id.id)
+            if move_lines:
+                current_uom = move_lines[0].product_uom
+            if current_uom.id != po_lines.product_uom.id:
                 final_qty = current_uom._compute_quantity(self.qty,po_lines.product_uom)
             else:
                 final_qty = self.qty

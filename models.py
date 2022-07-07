@@ -65,22 +65,23 @@ class StockPickingPurchase(models.Model):
 
     @api.constrains('product_id','qty')
     def check_product_id(self):
-        if self.product_id and self.purchase_order_id:
-            po_lines = self.env['purchase.order.line'].search(
-                    [('product_id','=',self.product_id.id),
-                     ('order_id','=',self.purchase_order_id.id)],
+        for rec in self:
+            if rec.product_id and rec.purchase_order_id:
+                po_lines = self.env['purchase.order.line'].search(
+                    [('product_id','=',rec.product_id.id),
+                     ('order_id','=',rec.purchase_order_id.id)],
                     limit=1
                     )
             if not po_lines:
-                raise ValidationError('Producto %s no esta presente en el pedido'%(self.product_id.name))
-            picking_id = self.picking_id
-            move_lines = picking_id.move_lines.filtered(lambda l: l.product_id.id == self.product_id.id)
+                raise ValidationError('Producto %s no esta presente en el pedido'%(rec.product_id.name))
+            picking_id = rec.picking_id
+            move_lines = picking_id.move_lines.filtered(lambda l: l.product_id.id == rec.product_id.id)
             if move_lines:
                 current_uom = move_lines[0].product_uom
             if current_uom.id != po_lines.product_uom.id:
-                final_qty = current_uom._compute_quantity(self.qty,po_lines.product_uom)
+                final_qty = current_uom._compute_quantity(rec.qty,po_lines.product_uom)
             else:
-                final_qty = self.qty
+                final_qty = rec.qty
             if po_lines.product_qty < final_qty:
                 raise ValidationError('La cantidad asignada no puede ser mayor a la cantidad pedida')
         products = {}

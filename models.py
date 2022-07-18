@@ -106,6 +106,21 @@ class StockPicking(models.Model):
 
     picking_purchase_ids = fields.One2many(comodel_name='stock.picking.purchase',inverse_name='picking_id',string='Ordenes de compra')
 
+    def button_validate(self):
+        res = super(StockPicking, self).button_validate()
+        for rec in self:
+            if rec.picking_type_code == 'incoming' and rec.purchase_id:
+                for move_id in rec.move_ids_without_package:
+                    vals = {
+                        'picking_id': rec.id,
+                        'partner_id': rec.purchase_id.partner_id.id,
+                        'purchase_order_id': rec.purchase_id.id,
+                        'product_id': move_id.product_id.id,
+                        'qty': move_id.quantity_done,
+                        }
+                    return_id = self.env['stock.picking.purchase'].create(vals)
+        return res
+
     def apply_picking_purchase_ids(self):
         self.ensure_one()
         purchases = {}
